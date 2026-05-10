@@ -11,7 +11,12 @@ import yt_dlp
 
 def get_video_info(url: str) -> dict:
     """Return video metadata without downloading."""
-    opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extractor_args": {"youtube": {"player_client": ["ios", "android"]}},
+    }
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
@@ -26,6 +31,7 @@ def download_video(url: str, output_dir: str = ".") -> None:
         "merge_output_format": "mp4",
         "quiet": False,
         "no_warnings": False,
+        "extractor_args": {"youtube": {"player_client": ["ios", "android"]}},
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
