@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import MagicMock, patch, call
 
 # Make sure the project root is on sys.path regardless of how tests are run.
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.dirname(__file__))
 
 import downloader
 
