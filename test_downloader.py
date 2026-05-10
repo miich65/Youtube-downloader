@@ -66,7 +66,7 @@ class TestPromptCookiesFromBrowser(unittest.TestCase):
         self.assertIn("not a recognised browser", mock_err.getvalue())
 
     def test_all_supported_browsers_accepted(self):
-        for browser in downloader.SUPPORTED_BROWSERS:
+        for browser in downloader._SUPPORTED_BROWSERS:
             with patch("builtins.input", return_value=browser):
                 result = downloader.prompt_cookies_from_browser()
             self.assertEqual(result, browser)
@@ -249,10 +249,10 @@ class TestMain(unittest.TestCase):
 
     def test_download_cancelled_on_no(self):
         inputs = [
-            "https://youtu.be/abc",
-            "",
-            "",
-            "n",
+            "https://youtu.be/abc",  # URL
+            "",                       # output dir (current)
+            "",                       # browser cookies (skip)
+            "n",                      # cancel download
         ]
         _, mock_dl = self._run_main(inputs)
         mock_dl.assert_not_called()
@@ -260,10 +260,10 @@ class TestMain(unittest.TestCase):
     def test_exits_on_download_error(self):
         import yt_dlp
         inputs = [
-            "https://youtu.be/abc",
-            "",
-            "",
-            "y",
+            "https://youtu.be/abc",  # URL
+            "",                       # output dir (current)
+            "",                       # browser cookies (skip)
+            "y",                      # confirm download
         ]
         with self.assertRaises(SystemExit):
             self._run_main(inputs, download_side_effect=yt_dlp.utils.DownloadError("fail"))
@@ -271,9 +271,9 @@ class TestMain(unittest.TestCase):
     def test_exits_on_info_fetch_error(self):
         import yt_dlp
         inputs = [
-            "https://youtu.be/abc",
-            "",
-            "",
+            "https://youtu.be/abc",  # URL
+            "",                       # output dir (current)
+            "",                       # browser cookies (skip)
         ]
         with patch("builtins.input", side_effect=iter(inputs)), \
              patch("downloader.get_video_info",

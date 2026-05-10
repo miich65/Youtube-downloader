@@ -13,7 +13,7 @@ import yt_dlp
 # requiring the user to be logged in.
 _PLAYER_CLIENTS = ["tv_embedded", "web_creator", "ios", "android"]
 
-SUPPORTED_BROWSERS = ["chrome", "firefox", "edge", "safari", "opera", "brave", "chromium", "vivaldi"]
+_SUPPORTED_BROWSERS = ["chrome", "firefox", "edge", "safari", "opera", "brave", "chromium", "vivaldi"]
 
 
 def _base_opts(cookies_from_browser: str | None = None) -> dict:
@@ -82,14 +82,14 @@ def prompt_cookies_from_browser() -> str | None:
     user's existing session, which bypasses bot-detection for age-restricted or
     otherwise restricted videos.  Pressing Enter skips this step.
     """
-    browsers = ", ".join(SUPPORTED_BROWSERS)
+    browsers = ", ".join(_SUPPORTED_BROWSERS)
     answer = input(
         f"Browser for cookies (optional, helps bypass bot-checks) [{browsers}] "
         "or press Enter to skip: "
     ).strip().lower()
     if not answer:
         return None
-    if answer not in SUPPORTED_BROWSERS:
+    if answer not in _SUPPORTED_BROWSERS:
         print(
             f"Warning: '{answer}' is not a recognised browser; skipping cookie extraction.",
             file=sys.stderr,
