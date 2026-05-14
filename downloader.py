@@ -4,6 +4,8 @@ YouTube Video Downloader
 Interactive command-line script to download YouTube videos using yt-dlp.
 """
 
+from __future__ import annotations
+
 import sys
 import os
 import yt_dlp
