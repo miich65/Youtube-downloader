@@ -45,6 +45,33 @@ class TestPromptOutputDir(unittest.TestCase):
         self.assertEqual(result, ".")
 
 
+class TestPromptCookiesFromBrowser(unittest.TestCase):
+    """Tests for prompt_cookies_from_browser()."""
+
+    def test_returns_none_on_empty(self):
+        with patch("builtins.input", return_value=""):
+            result = downloader.prompt_cookies_from_browser()
+        self.assertIsNone(result)
+
+    def test_returns_browser_name_lowercase(self):
+        with patch("builtins.input", return_value="Chrome"):
+            result = downloader.prompt_cookies_from_browser()
+        self.assertEqual(result, "chrome")
+
+    def test_returns_none_and_warns_on_unknown_browser(self):
+        with patch("builtins.input", return_value="unknownbrowser"), \
+             patch("sys.stderr", new_callable=io.StringIO) as mock_err:
+            result = downloader.prompt_cookies_from_browser()
+        self.assertIsNone(result)
+        self.assertIn("not a recognised browser", mock_err.getvalue())
+
+    def test_all_supported_browsers_accepted(self):
+        for browser in downloader._SUPPORTED_BROWSERS:
+            with patch("builtins.input", return_value=browser):
+                result = downloader.prompt_cookies_from_browser()
+            self.assertEqual(result, browser)
+
+
 class TestGetVideoInfo(unittest.TestCase):
     """Tests for get_video_info()."""
 
@@ -81,6 +108,46 @@ class TestGetVideoInfo(unittest.TestCase):
             downloader.get_video_info("https://youtu.be/test")
 
         self.assertTrue(captured_opts.get("skip_download"))
+
+    def test_tv_embedded_player_client_is_first(self):
+        cm, _ = self._make_ydl_mock({})
+        captured_opts = {}
+
+        def fake_ydl(opts):
+            captured_opts.update(opts)
+            return cm
+
+        with patch("downloader.yt_dlp.YoutubeDL", side_effect=fake_ydl):
+            downloader.get_video_info("https://youtu.be/test")
+
+        clients = captured_opts["extractor_args"]["youtube"]["player_client"]
+        self.assertEqual(clients[0], "tv_embedded")
+
+    def test_cookies_from_browser_passed_when_provided(self):
+        cm, _ = self._make_ydl_mock({})
+        captured_opts = {}
+
+        def fake_ydl(opts):
+            captured_opts.update(opts)
+            return cm
+
+        with patch("downloader.yt_dlp.YoutubeDL", side_effect=fake_ydl):
+            downloader.get_video_info("https://youtu.be/test", cookies_from_browser="firefox")
+
+        self.assertEqual(captured_opts.get("cookiesfrombrowser"), ("firefox",))
+
+    def test_no_cookies_key_when_not_provided(self):
+        cm, _ = self._make_ydl_mock({})
+        captured_opts = {}
+
+        def fake_ydl(opts):
+            captured_opts.update(opts)
+            return cm
+
+        with patch("downloader.yt_dlp.YoutubeDL", side_effect=fake_ydl):
+            downloader.get_video_info("https://youtu.be/test")
+
+        self.assertNotIn("cookiesfrombrowser", captured_opts)
 
 
 class TestDownloadVideo(unittest.TestCase):
@@ -126,6 +193,20 @@ class TestDownloadVideo(unittest.TestCase):
 
         self.assertIn("/my/dir", captured_opts["outtmpl"])
 
+    def test_cookies_from_browser_forwarded_to_ydl(self):
+        cm, _ = self._make_ydl_mock()
+        captured_opts = {}
+
+        def fake_ydl(opts):
+            captured_opts.update(opts)
+            return cm
+
+        with patch("downloader.yt_dlp.YoutubeDL", side_effect=fake_ydl), \
+             patch("os.makedirs"):
+            downloader.download_video("https://youtu.be/test", "/tmp/out", cookies_from_browser="chrome")
+
+        self.assertEqual(captured_opts.get("cookiesfrombrowser"), ("chrome",))
+
 
 class TestMain(unittest.TestCase):
     """Integration-style tests for main() using mocks."""
@@ -148,17 +229,30 @@ class TestMain(unittest.TestCase):
         inputs = [
             "https://youtu.be/abc",  # URL
             "",                       # output dir (current)
+            "",                       # browser cookies (skip)
             "y",                      # confirm download
         ]
         mock_info, mock_dl = self._run_main(inputs)
-        mock_info.assert_called_once_with("https://youtu.be/abc")
-        mock_dl.assert_called_once_with("https://youtu.be/abc", ".")
+        mock_info.assert_called_once_with("https://youtu.be/abc", None)
+        mock_dl.assert_called_once_with("https://youtu.be/abc", ".", None)
+
+    def test_full_happy_path_with_browser_cookies(self):
+        inputs = [
+            "https://youtu.be/abc",  # URL
+            "",                       # output dir (current)
+            "firefox",                # browser cookies
+            "y",                      # confirm download
+        ]
+        mock_info, mock_dl = self._run_main(inputs)
+        mock_info.assert_called_once_with("https://youtu.be/abc", "firefox")
+        mock_dl.assert_called_once_with("https://youtu.be/abc", ".", "firefox")
 
     def test_download_cancelled_on_no(self):
         inputs = [
-            "https://youtu.be/abc",
-            "",
-            "n",
+            "https://youtu.be/abc",  # URL
+            "",                       # output dir (current)
+            "",                       # browser cookies (skip)
+            "n",                      # cancel download
         ]
         _, mock_dl = self._run_main(inputs)
         mock_dl.assert_not_called()
@@ -166,9 +260,10 @@ class TestMain(unittest.TestCase):
     def test_exits_on_download_error(self):
         import yt_dlp
         inputs = [
-            "https://youtu.be/abc",
-            "",
-            "y",
+            "https://youtu.be/abc",  # URL
+            "",                       # output dir (current)
+            "",                       # browser cookies (skip)
+            "y",                      # confirm download
         ]
         with self.assertRaises(SystemExit):
             self._run_main(inputs, download_side_effect=yt_dlp.utils.DownloadError("fail"))
@@ -176,8 +271,9 @@ class TestMain(unittest.TestCase):
     def test_exits_on_info_fetch_error(self):
         import yt_dlp
         inputs = [
-            "https://youtu.be/abc",
-            "",
+            "https://youtu.be/abc",  # URL
+            "",                       # output dir (current)
+            "",                       # browser cookies (skip)
         ]
         with patch("builtins.input", side_effect=iter(inputs)), \
              patch("downloader.get_video_info",
@@ -188,3 +284,4 @@ class TestMain(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
